@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试 GitHub Token</title>
+</head>
+<body>
+    <h2>GitHub Token 测试工具</h2>
+    <div>
+        <label>GitHub 用户名：</label>
+        <input type="text" id="username" placeholder="你的GitHub用户名">
+    </div>
+    <div>
+        <label>仓库名：</label>
+        <input type="text" id="repo" placeholder="你的仓库名">
+    </div>
+    <div>
+        <label>Token：</label>
+        <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx" style="width: 300px;">
+    </div>
+    <button onclick="testToken()">测试 Token</button>
+    <div id="result" style="margin-top: 20px; white-space: pre-wrap;"></div>
+
+    <script>
+    async function testToken() {
+        const username = document.getElementById('username').value;
+        const repo = document.getElementById('repo').value;
+        const token = document.getElementById('token').value;
+        
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '测试中...';
+        
+        if (!username || !repo || !token) {
+            resultDiv.innerHTML = '❌ 请填写所有字段';
+            return;
+        }
+        
+        // 测试1: 验证 Token 基本格式
+        if (!token.startsWith('ghp_')) {
+            resultDiv.innerHTML = '❌ Token 格式错误：应该以 "ghp_" 开头';
+            return;
+        }
+        
+        try {
+            // 测试2: 获取用户信息（验证 Token 是否有效）
+            const userResponse = await fetch('https://api.github.com/user', {
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+            
+            if (!userResponse.ok) {
+                const error = await userResponse.json();
+                resultDiv.innerHTML = `❌ Token 无效！\n错误: ${error.message}\n状态码: ${userResponse.status}`;
+                return;
+            }
+            
+            const userData = await userResponse.json();
+            resultDiv.innerHTML = `✅ Token 有效！\n已认证用户: ${userData.login}\n\n`;
+            
+            // 测试3: 检查仓库是否存在
+            const repoResponse = await fetch(`https://api.github.com/repos/${username}/${repo}`, {
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+            
+            if (!repoResponse.ok) {
+                resultDiv.innerHTML += `❌ 仓库不存在或无权限访问！\n请检查仓库名是否正确，或仓库是否为私有且 Token 有权限`;
+                return;
+            }
+            
+            const repoData = await repoResponse.json();
+            resultDiv.innerHTML += `✅ 仓库访问成功！\n仓库: ${repoData.full_name}\n可见性: ${repoData.private ? '私有' : '公开'}\n\n`;
+            
+            // 测试4: 测试创建 Issue 权限
+            resultDiv.innerHTML += `测试创建 Issue 权限...\n`;
+            
+            const testIssueResponse = await fetch(`https://api.github.com/repos/${username}/${repo}/issues`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: 'Token 测试 - 可删除',
+                    body: '这是一个测试 Issue，测试完成后可以删除。',
+                    labels: ['test']
+                })
+            });
+            
+            if (testIssueResponse.ok) {
+                const issue = await testIssueResponse.json();
+                resultDiv.innerHTML += `✅ 可以创建 Issue！\nIssue 链接: ${issue.html_url}\n\n🎉 所有测试通过！Token 配置正确。`;
+            } else {
+                const error = await testIssueResponse.json();
+                resultDiv.innerHTML += `❌ 无法创建 Issue！\n错误: ${error.message}\n\n请确保 Token 有 repo 或 public_repo 权限。`;
+            }
+            
+        } catch (error) {
+            resultDiv.innerHTML = `❌ 网络错误: ${error.message}\n请检查网络连接。`;
+        }
+    }
+    </script>
+</body>
+</html>
